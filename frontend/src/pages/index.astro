@@ -1,0 +1,551 @@
+---
+// Astro Frontend
+---
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width" />
+		<title>Clipboard Mapping Tool</title>
+		<!-- is:global: .req-item and .dropped-badge are created by script, so Astro's scoped styles would not reach them -->
+		<style is:global>
+			body {
+				font-family: system-ui, sans-serif;
+				margin: 0;
+				padding: 0;
+				display: flex;
+				height: 100vh;
+				background-color: #f4f5f7;
+			}
+			/* Sidebar Left Pane */
+			.left-pane {
+				width: 320px;
+				background: white;
+				border-right: 1px solid #e1e4e8;
+				padding: 20px;
+				box-sizing: border-box;
+				overflow-y: auto;
+				z-index: 10;
+			}
+			.left-pane h2 {
+				margin-top: 0;
+				font-size: 1.2rem;
+				color: #333;
+				border-bottom: 2px solid #0076ff;
+				padding-bottom: 8px;
+			}
+			.req-item {
+				background: #f8f9fa;
+				border: 1px solid #d1d5da;
+				border-radius: 6px;
+				padding: 12px;
+				margin-bottom: 12px;
+				cursor: grab;
+				user-select: none;
+				transition: background 0.2s;
+			}
+			.req-item:hover {
+				background: #eef5ff;
+				border-color: #0076ff;
+			}
+			/* Main Content Window */
+			.main-content {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				padding: 40px;
+				box-sizing: border-box;
+				overflow: auto;
+			}
+			/* Empty state styling */
+			.empty-state {
+				width: 100%;
+				max-width: 600px;
+				height: 400px;
+				border: 2px dashed #ccc;
+				border-radius: 8px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background: white;
+				color: #666;
+				text-align: center;
+				padding: 20px;
+				box-sizing: border-box;
+			}
+			.empty-state:focus {
+				outline: none;
+				border-color: #0076ff;
+				background-color: #fafdff;
+			}
+			/* Tight canvas wrapper matching image dimensions exactly */
+			/* Image on the left, a right margin column (padding-right) for the requirement cards */
+			#drop-zone-wrapper {
+				position: relative;
+				display: inline-block;
+				padding-right: 240px; /* MARGIN_GAP + BADGE_WIDTH in the script */
+			}
+			#preview {
+				display: block;
+				box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+				background: white;
+				max-width: calc(100vw - 320px - 80px - 240px); /* minus sidebar, page padding, card column */
+				max-height: 70vh;
+				height: auto;
+				width: auto;
+				border-radius: 4px;
+			}
+			/* Overlay SVG layers strictly inside wrapper context */
+			#overlay-canvas {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				pointer-events: none;
+				z-index: 5;
+			}
+			/* Requirement card in the right margin column */
+			.dropped-badge {
+				position: absolute;
+				padding: 6px 12px;
+				color: white;
+				font-size: 13px;
+				font-weight: 500;
+				border-radius: 6px;
+				white-space: normal;
+				box-sizing: border-box;
+				pointer-events: none;
+				box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+				z-index: 6;
+				line-height: 1.3;
+			}
+			/* Upload Action Footer */
+			.actions {
+				display: flex;
+				flex-wrap: wrap;
+				justify-content: center;
+				gap: 10px;
+				margin-top: 25px;
+			}
+			button {
+				padding: 10px 24px;
+				font-size: 16px;
+				background-color: #0076ff;
+				color: white;
+				border: none;
+				border-radius: 6px;
+				cursor: pointer;
+				font-weight: 500;
+			}
+			button.icon-btn {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				width: 44px;
+				height: 44px;
+				padding: 0;
+			}
+			button.secondary {
+				background-color: white;
+				color: #0076ff;
+				border: 1px solid #0076ff;
+			}
+			#status-msg {
+				flex-basis: 100%;
+				margin: 10px 0 0;
+				min-height: 1.2em;
+				font-size: 14px;
+				color: #555;
+				text-align: center;
+			}
+			#status-msg.error {
+				color: #c62828;
+			}
+			button.secondary:disabled {
+				border-color: #ccc;
+			}
+			button:disabled {
+				background-color: #ccc;
+				cursor: not-allowed;
+			}
+		</style>
+	</head>
+	<body>
+
+		<!-- Left Sidebar: Requirements List -->
+		<div class="left-pane">
+			<h2>System Requirements</h2>
+			<div id="requirements-list">Loading requirements from server...</div>
+		</div>
+
+		<!-- Right Side Canvas: Upload and Interaction -->
+		<div class="main-content">
+			
+			<div id="empty-state-prompt" class="empty-state" tabindex="0">
+				<p>Click here and press Ctrl+V (or Cmd+V) to paste a screenshot,<br />or use the upload button to choose a PNG or GIF.</p>
+			</div>
+
+			<div id="drop-zone-wrapper" style="display: none;">
+				<img id="preview" alt="Screenshot preview" />
+				<svg id="overlay-canvas"></svg>
+			</div>
+			
+			<div class="actions">
+				<input id="file-input" type="file" accept="image/png,image/gif" hidden />
+				<button id="upload-btn" class="icon-btn" title="Upload image (PNG or GIF)" aria-label="Upload image">
+					<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+				</button>
+				<button id="refresh-btn" class="icon-btn secondary" title="Refresh (clears image and mappings)" aria-label="Refresh">
+					<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+				</button>
+				<button id="save-draft-btn" class="icon-btn secondary" title="Save draft" aria-label="Save draft" disabled>
+					<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+				</button>
+				<button id="save-btn" class="icon-btn" title="Save (all requirements mapped)" aria-label="Save" disabled>
+					<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+				</button>
+				<p id="status-msg" role="status"></p>
+			</div>
+		</div>
+
+		<script>
+			type Requirement = { id: number; text: string };
+			type Pin = {
+				id: number;
+				text: string;
+				color: string;
+				pctX: number; // 0..1 of displayed image width
+				pctY: number; // 0..1 of displayed image height
+				x: number;    // pixel x in the original (natural) image
+				y: number;    // pixel y in the original (natural) image
+			};
+
+			const API_BASE = 'http://localhost:8080';
+			const BADGE_WIDTH = 200;  // keep in sync with the wrapper's padding-right in CSS
+			const MARGIN_GAP = 40;    // space between the image's right edge and the cards
+			const CARD_SPACING = 8;   // vertical gap between stacked cards
+			const PIN_RADIUS = 8;
+
+			const emptyStatePrompt = document.getElementById('empty-state-prompt') as HTMLDivElement;
+			const dropZoneWrapper = document.getElementById('drop-zone-wrapper') as HTMLDivElement;
+			const preview = document.getElementById('preview') as HTMLImageElement;
+			const uploadBtn = document.getElementById('upload-btn') as HTMLButtonElement;
+			const refreshBtn = document.getElementById('refresh-btn') as HTMLButtonElement;
+			const saveDraftBtn = document.getElementById('save-draft-btn') as HTMLButtonElement;
+			const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
+			const statusMsg = document.getElementById('status-msg') as HTMLParagraphElement;
+			const reqListContainer = document.getElementById('requirements-list') as HTMLDivElement;
+			const svgCanvas = document.getElementById('overlay-canvas') as unknown as SVGSVGElement;
+
+			let targetFile: File | null = null;
+			let previewUrl: string | null = null;
+			const colors = ['#e6194B', '#3cb44b', '#1d4ed8', '#f58231', '#911eb4', '#42d4f4', '#b5179e', '#00f5d4'];
+			let pinnedRequirements: Pin[] = [];
+			let requirements: Requirement[] = [];
+			let busy = false;
+
+			// 1. Fetch requirements dynamically from Go server
+			async function loadRequirements() {
+				try {
+					const res = await fetch(`${API_BASE}/api/requirements`);
+					if (!res.ok) throw new Error(`HTTP ${res.status}`);
+					const data: Requirement[] = await res.json();
+					requirements = data;
+
+					reqListContainer.innerHTML = '';
+					data.forEach((req, idx) => {
+						const div = document.createElement('div');
+						div.className = 'req-item';
+						div.style.borderLeft = '4px solid #d1d5da';
+						div.style.transition = 'all 0.2s ease';
+						div.draggable = true;
+						div.innerText = `${req.id}) ${req.text}`;
+						div.id = `sidebar-req-${req.id}`;
+						div.dataset.id = String(req.id);
+
+						div.addEventListener('dragstart', (e) => {
+							if (!e.dataTransfer) return;
+							e.dataTransfer.effectAllowed = 'copy';
+							e.dataTransfer.setData('text/plain', JSON.stringify({
+								id: req.id,
+								text: req.text,
+								color: colors[idx % colors.length]
+							}));
+						});
+						reqListContainer.appendChild(div);
+					});
+				} catch (err) {
+					console.error('Failed to load requirements:', err);
+					requirements = [];
+					reqListContainer.innerText = 'Failed to load requirements from backend.';
+				}
+				renderAllPins();
+			}
+
+			// 2. Clipboard Paste Handler
+			// Listen on the document: the image wrapper is not focusable, so a listener on it
+			// never fires and a second screenshot could not replace the first.
+			function handlePaste(event: ClipboardEvent) {
+				const items = event.clipboardData?.items;
+				if (!items) return;
+				for (const item of items) {
+					if (!item.type.startsWith('image/')) continue;
+					const blob = item.getAsFile();
+					if (!blob) continue;
+					event.preventDefault();
+
+					loadImage(new File([blob], `screenshot-${Date.now()}.png`, { type: blob.type }));
+					break;
+				}
+			}
+
+			document.addEventListener('paste', handlePaste);
+
+			// Shows a pasted or chosen image and starts a fresh mapping on it.
+			function loadImage(file: File) {
+				targetFile = file;
+				if (previewUrl) URL.revokeObjectURL(previewUrl);
+				previewUrl = URL.createObjectURL(file);
+
+				preview.onload = () => {
+					emptyStatePrompt.style.display = 'none';
+					dropZoneWrapper.style.display = 'inline-block';
+					setStatus('');
+					clearPins();
+				};
+				preview.onerror = () => setStatus('Could not read that image file.', true);
+				preview.src = previewUrl;
+			}
+
+			// Upload button: pick a PNG or GIF from the local filesystem.
+			const ALLOWED_TYPES: Record<string, string> = { 'image/png': 'png', 'image/gif': 'gif' };
+			const fileInput = document.getElementById('file-input') as HTMLInputElement;
+			uploadBtn.addEventListener('click', () => fileInput.click());
+			fileInput.addEventListener('change', () => {
+				const file = fileInput.files?.[0];
+				fileInput.value = ''; // allow choosing the same file again
+				if (!file) return;
+				const ext = ALLOWED_TYPES[file.type];
+				if (!ext) {
+					setStatus('Only PNG or GIF images are supported.', true);
+					return;
+				}
+				// Timestamped name, like pasted screenshots, so saves never overwrite each other.
+				loadImage(new File([file], `image-${Date.now()}.${ext}`, { type: file.type }));
+			});
+
+			function clearPins() {
+				pinnedRequirements = [];
+				renderAllPins();
+			}
+
+			// 3. Drop Zone Target Handlers
+			dropZoneWrapper.addEventListener('dragover', (e) => {
+				if (!targetFile) return;
+				e.preventDefault();
+				if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+			});
+
+			dropZoneWrapper.addEventListener('drop', (e) => {
+				e.preventDefault();
+				if (!targetFile || !e.dataTransfer) return;
+
+				try {
+					const rawData = e.dataTransfer.getData('text/plain');
+					if (!rawData) return;
+					const data = JSON.parse(rawData) as { id: number; text: string; color: string };
+
+					// Measure against the image itself, and clamp so a drop can never land outside it.
+					const rect = preview.getBoundingClientRect();
+					if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
+					const pctX = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
+					const pctY = Math.min(Math.max((e.clientY - rect.top) / rect.height, 0), 1);
+
+					const pin: Pin = {
+						id: data.id,
+						text: data.text,
+						color: data.color,
+						pctX,
+						pctY,
+						x: Math.round(pctX * preview.naturalWidth),
+						y: Math.round(pctY * preview.naturalHeight)
+					};
+
+					// Re-dragging a requirement moves its pin rather than stacking a duplicate.
+					const existing = pinnedRequirements.findIndex(p => p.id === data.id);
+					if (existing >= 0) pinnedRequirements[existing] = pin;
+					else pinnedRequirements.push(pin);
+					setStatus('');
+
+					renderAllPins();
+				} catch (err) {
+					console.error("Drop parsing error:", err);
+				}
+			});
+
+			// 4. Rendering: positions are stored as fractions, so redraw from the current size.
+			// Pins sit on the image; their requirement cards stack in the right margin column,
+			// each joined to its pin by a leader line.
+			function renderAllPins() {
+				svgCanvas.innerHTML = '';
+				document.querySelectorAll('.dropped-badge').forEach(b => b.remove());
+				dropZoneWrapper.style.minHeight = '';
+				highlightSidebar();
+				updateButtons();
+
+				if (!targetFile) return;
+				const rect = preview.getBoundingClientRect();
+				const svgNS = "http://www.w3.org/2000/svg";
+				const cardLeft = rect.width + MARGIN_GAP;
+
+				// Place cards top-down in pin order so they never overlap.
+				const ordered = [...pinnedRequirements].sort((a, b) => a.pctY - b.pctY);
+				let nextFreeTop = 0;
+				let bottom = rect.height;
+
+				ordered.forEach(pin => {
+					const dropX = pin.pctX * rect.width;
+					const dropY = pin.pctY * rect.height;
+
+					const badge = document.createElement('div');
+					badge.className = 'dropped-badge';
+					badge.style.left = cardLeft + 'px';
+					badge.style.width = BADGE_WIDTH + 'px';
+					badge.style.backgroundColor = pin.color;
+					badge.innerText = pin.text;
+					badge.title = `Requirement ${pin.id} @ (${pin.x}, ${pin.y}) px`;
+					dropZoneWrapper.appendChild(badge);
+
+					// Center the card on the pin's height unless that would overlap the card above.
+					const height = badge.offsetHeight;
+					const top = Math.max(dropY - height / 2, nextFreeTop);
+					badge.style.top = top + 'px';
+					nextFreeTop = top + height + CARD_SPACING;
+					bottom = Math.max(bottom, top + height);
+					const cardMidY = top + height / 2;
+
+					// Leader line from the edge of the pin to the card's left edge.
+					const angle = Math.atan2(cardMidY - dropY, cardLeft - dropX);
+					const line = document.createElementNS(svgNS, 'line');
+					line.setAttribute('x1', String(dropX + Math.cos(angle) * PIN_RADIUS));
+					line.setAttribute('y1', String(dropY + Math.sin(angle) * PIN_RADIUS));
+					line.setAttribute('x2', String(cardLeft));
+					line.setAttribute('y2', String(cardMidY));
+					line.setAttribute('stroke', pin.color);
+					line.setAttribute('stroke-width', '1.5');
+					line.setAttribute('stroke-dasharray', '4,3');
+					svgCanvas.appendChild(line);
+
+					const circle = document.createElementNS(svgNS, 'circle');
+					circle.setAttribute('cx', String(dropX));
+					circle.setAttribute('cy', String(dropY));
+					circle.setAttribute('r', String(PIN_RADIUS));
+					circle.setAttribute('fill', pin.color);
+					circle.setAttribute('stroke', '#ffffff');
+					circle.setAttribute('stroke-width', '1.5');
+					svgCanvas.appendChild(circle);
+
+					const textMarker = document.createElementNS(svgNS, 'text');
+					textMarker.setAttribute('x', String(dropX));
+					textMarker.setAttribute('y', String(dropY));
+					textMarker.setAttribute('fill', '#ffffff');
+					textMarker.setAttribute('font-size', '9px');
+					textMarker.setAttribute('font-weight', 'bold');
+					textMarker.setAttribute('text-anchor', 'middle');
+					textMarker.setAttribute('dominant-baseline', 'central');
+					textMarker.textContent = String(pin.id);
+					svgCanvas.appendChild(textMarker);
+				});
+
+				// Grow the wrapper if the stacked cards run past the bottom of the image.
+				if (bottom > rect.height) dropZoneWrapper.style.minHeight = bottom + 'px';
+			}
+
+			window.addEventListener('resize', renderAllPins);
+
+			// Color the sidebar card of every requirement that has a pin.
+			function highlightSidebar() {
+				const colorById = new Map(pinnedRequirements.map(p => [p.id, p.color]));
+				document.querySelectorAll<HTMLElement>('.req-item').forEach(item => {
+					const color = colorById.get(Number(item.dataset.id));
+					item.style.borderLeft = color ? `6px solid ${color}` : '4px solid #d1d5da';
+					item.style.backgroundColor = color ? `${color}10` : '#f8f9fa';
+				});
+			}
+
+			// Save Draft is offered until every requirement is mapped; then it is replaced by Save.
+			function updateButtons() {
+				const allMapped = requirements.length > 0 &&
+					requirements.every(r => pinnedRequirements.some(p => p.id === r.id));
+				uploadBtn.disabled = busy;
+				refreshBtn.disabled = busy;
+				saveDraftBtn.hidden = allMapped;
+				saveDraftBtn.disabled = busy || !targetFile;
+				saveBtn.disabled = busy || !targetFile || !allMapped;
+			}
+
+			function setStatus(text: string, isError = false) {
+				statusMsg.textContent = text;
+				statusMsg.classList.toggle('error', isError);
+			}
+
+			// 5. Save Draft / Save: send the image plus the pin coordinates; the backend stores
+			// the mapping next to the image with this status ("draft" or "final").
+			async function submit(busyText: string, successText: string, status: 'draft' | 'final') {
+				if (!targetFile || busy) return;
+				const formData = new FormData();
+				formData.append('image', targetFile);
+				formData.append('pins', JSON.stringify(pinnedRequirements.map(({ id, text, x, y, pctX, pctY }) => ({
+					id, text, x, y, pctX, pctY
+				}))));
+				formData.append('status', status);
+
+				busy = true;
+				setStatus(busyText);
+				updateButtons();
+				try {
+					const response = await fetch(`${API_BASE}/api/upload`, {
+						method: 'POST',
+						body: formData
+					});
+					if (response.ok) setStatus(successText);
+					else setStatus(`Failed (${response.status}): ${(await response.text()).trim()}`, true);
+				} catch (error) {
+					setStatus('Could not connect to backend server.', true);
+				} finally {
+					busy = false;
+					updateButtons();
+				}
+			}
+
+			saveDraftBtn.addEventListener('click', () => {
+				const remaining = requirements.length - pinnedRequirements.length;
+				submit('Saving draft...', `Draft saved (${remaining} requirement${remaining === 1 ? '' : 's'} still unmapped).`, 'draft');
+			});
+			saveBtn.addEventListener('click', () => submit('Saving...', 'Mapping saved.', 'final'));
+
+			// Refresh starts over: drop the screenshot and every mapped requirement, then re-fetch requirements.
+			refreshBtn.addEventListener('click', async () => {
+				targetFile = null;
+				if (previewUrl) URL.revokeObjectURL(previewUrl);
+				previewUrl = null;
+				preview.removeAttribute('src');
+				dropZoneWrapper.style.display = 'none';
+				emptyStatePrompt.style.display = '';
+				clearPins();
+
+				busy = true;
+				setStatus('Refreshing...');
+				updateButtons();
+				await loadRequirements();
+				busy = false;
+				updateButtons();
+				setStatus(requirements.length ? 'Cleared. Paste a new screenshot.' : 'Could not refresh requirements.', !requirements.length);
+			});
+
+			loadRequirements();
+		</script>
+	</body>
+</html>
