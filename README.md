@@ -144,3 +144,7 @@ Then open http://localhost:8787/sandbox/astro-clipboard/.
 ## Credits
 
 Built by [Data Cloud LLC](https://vdatacloud.com). Colors, the Plus Jakarta Sans font, and the logo follow the Data Cloud design system ([@vdatacloud/cx-commons](https://github.com/vdatacloud/cx-commons)).
+
+## License
+
+[MIT](LICENSE), © 2026 Data Cloud LLC.
