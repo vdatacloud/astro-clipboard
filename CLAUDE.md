@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-"Clipboard Mapping Tool": a user pastes a screenshot, then drags requirement cards from a sidebar onto the image to pin annotated markers. The image can then be uploaded to the backend. It has two independent parts with no shared build:
+"Clipped Image Upload and Markup" (README.md is the user-facing guide): a user pastes a screenshot, then drags requirement cards from a sidebar onto the image to pin annotated markers. The image can then be uploaded to the backend. It has two independent parts with no shared build:
 
 - `backend/`: a single-file Go HTTP server (`main.go`, stdlib only, module `astro-clipboard`, Go 1.27.1) on `:8080`.
 - `frontend/`: an Astro 7 site (Node >= 22.12.0). Almost all logic lives in one page, `src/pages/index.astro`, as an inline `<script>`.
@@ -38,6 +38,7 @@ npm run build:demo   # BASE_PATH and PUBLIC_API_BASE = /sandbox/astro-clipboard
 npm run deploy       # build:demo + wrangler deploy (needs `npx wrangler login`)
 npx wrangler dev     # local test at http://localhost:8787/sandbox/astro-clipboard/ (after build:demo)
 ```
+`.github/workflows/deploy.yml` builds every PR (`go vet`/`go build` plus `npm run build:demo`) and runs `wrangler deploy` on a push to `main`, a published release, or a manual run. It needs the `CLOUDFLARE_API_TOKEN` secret and the `CLOUDFLARE_ACCOUNT_ID` repo variable.
 The Worker has no route or workers.dev URL of its own. The website Worker (`vdatacloud/website`, `worker/index.js`) forwards `/sandbox/astro-clipboard/*` to it through the `ASTRO_CLIPBOARD` service binding and adds the site's security headers. Astro writes `dist/` at the root even when `base` is set, so the Worker strips the `/sandbox/astro-clipboard` prefix before calling `ASSETS`.
 
 ## Architecture
@@ -49,6 +50,7 @@ The Worker has no route or workers.dev URL of its own. The website Worker (`vdat
 
 **Frontend (frontend/src/pages/index.astro)**
 - The backend URL is `import.meta.env.PUBLIC_API_BASE`, and it falls back to `http://localhost:8080`. There is no dev proxy.
+- Branding follows the Data Cloud design system (@vdatacloud/cx-commons): the `:root` color tokens and the Plus Jakarta Sans `@font-face` are copied from its `global.css`, because importing that CSS brings in Tailwind's reset and would restyle the page. Use the `var(--color-*)` tokens rather than raw hex. The logo (`src/assets/datacloud-logo.svg`, also `public/favicon.*`) comes from the website repo's `public/favicon.svg`, not from cx-commons. The sidebar has the title header and a footer crediting Data Cloud LLC and linking to the GitHub repo.
 - The page `<style>` is `is:global` on purpose: `.req-item` and `.dropped-badge` elements are created by script, and Astro's default scoped styles never reach them.
 - Flow: `loadRequirements()` builds draggable sidebar items. A paste event wraps the clipboard image as `screenshot-<Date.now()>.png` (this name becomes the filename on the server). Dropping a requirement onto `#drop-zone-wrapper` stores a pin in `pinnedRequirements`.
 - Pins are stored as **percentages** (`pctX`, `pctY`) of the displayed image (`#preview`), plus `x`/`y` in the image's natural pixels. `renderAllPins()` clears everything and redraws it on every change and on window resize: SVG pin circles and dashed leader lines go in `#overlay-canvas`; the requirement cards (`.dropped-badge`) stack without overlapping in a right margin column created by the wrapper's `padding-right`, which must match `MARGIN_GAP + BADGE_WIDTH` in the script. Drops outside the image are ignored. Keep pins as percentages so they stay aligned with the image when the window is resized.

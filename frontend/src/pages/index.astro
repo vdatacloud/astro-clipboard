@@ -1,41 +1,112 @@
 ---
-// Astro Frontend
+import logo from '../assets/datacloud-logo.svg';
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
 ---
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width" />
-		<title>Clipboard Mapping Tool</title>
+		<title>Clipped Image Upload and Markup</title>
+		<meta name="description" content="Paste a screenshot and pin requirements onto it. A demo by Data Cloud LLC." />
+		<link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+		<link rel="icon" href={`${base}favicon.ico`} sizes="any" />
 		<!-- is:global: .req-item and .dropped-badge are created by script, so Astro's scoped styles would not reach them -->
 		<style is:global>
+			/* Data Cloud brand tokens, copied from @vdatacloud/cx-commons (src/styles/global.css).
+			   That package's CSS starts with Tailwind's reset, which would restyle this page, so it is not imported. */
+			:root {
+				--color-brand-50: #eff6ff;
+				--color-brand-100: #d9eaff;
+				--color-brand-500: #3a8eed; /* logo cloud */
+				--color-brand-600: #1671ce; /* links/text on light bg, 4.9:1 on white */
+				--color-brand-700: #005cb0;
+				--color-leaf-500: #68bc36;  /* logo data */
+				--color-slate-50: #f8fafc;
+				--color-slate-100: #f1f5f9;
+				--color-slate-200: #e2e8f0;
+				--color-slate-300: #cbd5e1;
+				--color-slate-500: #64748b;
+				--color-slate-600: #475569;
+				--color-slate-800: #1e293b;
+				--color-slate-900: #0f172a;
+				--color-critical: var(--color-critical);
+			}
+			@font-face {
+				font-family: 'Plus Jakarta Sans';
+				font-style: normal;
+				font-weight: 300 800;
+				font-display: swap;
+				src: url('../assets/plus-jakarta-sans-latin.woff2') format('woff2');
+				unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+			}
 			body {
-				font-family: system-ui, sans-serif;
+				font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 				margin: 0;
 				padding: 0;
 				display: flex;
 				height: 100vh;
-				background-color: #f4f5f7;
+				background-color: var(--color-slate-100);
 			}
 			/* Sidebar Left Pane */
 			.left-pane {
 				width: 320px;
 				background: white;
-				border-right: 1px solid #e1e4e8;
+				border-right: 1px solid var(--color-slate-200);
 				padding: 20px;
 				box-sizing: border-box;
 				overflow-y: auto;
 				z-index: 10;
+				display: flex;
+				flex-direction: column;
+			}
+			.app-header {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				margin-bottom: 20px;
+			}
+			.app-header img {
+				width: 44px;
+				height: auto;
+				flex: none;
+			}
+			.left-pane h1 {
+				margin: 0;
+				font-size: 1.25rem;
+				font-weight: 800;
+				line-height: 1.25;
+				color: var(--color-slate-900);
+			}
+			.app-footer {
+				margin-top: auto;
+				padding-top: 16px;
+				border-top: 1px solid var(--color-slate-200);
+				font-size: 0.8rem;
+				color: var(--color-slate-500);
+				line-height: 1.6;
+			}
+			.app-footer a {
+				color: var(--color-brand-700);
+				text-decoration: none;
+			}
+			.app-footer a:hover {
+				text-decoration: underline;
+			}
+			.app-footer svg {
+				vertical-align: -2px;
+				margin-right: 4px;
 			}
 			.left-pane h2 {
 				margin-top: 0;
 				font-size: 1.2rem;
-				color: #333;
-				border-bottom: 2px solid #0076ff;
+				color: var(--color-slate-800);
+				border-bottom: 2px solid var(--color-brand-600);
 				padding-bottom: 8px;
 			}
 			.req-item {
-				background: #f8f9fa;
-				border: 1px solid #d1d5da;
+				background: var(--color-slate-50);
+				border: 1px solid var(--color-slate-300);
 				border-radius: 6px;
 				padding: 12px;
 				margin-bottom: 12px;
@@ -44,8 +115,8 @@
 				transition: background 0.2s;
 			}
 			.req-item:hover {
-				background: #eef5ff;
-				border-color: #0076ff;
+				background: var(--color-brand-50);
+				border-color: var(--color-brand-600);
 			}
 			/* Main Content Window */
 			.main-content {
@@ -63,21 +134,21 @@
 				width: 100%;
 				max-width: 600px;
 				height: 400px;
-				border: 2px dashed #ccc;
+				border: 2px dashed var(--color-slate-300);
 				border-radius: 8px;
 				display: flex;
 				align-items: center;
 				justify-content: center;
 				background: white;
-				color: #666;
+				color: var(--color-slate-600);
 				text-align: center;
 				padding: 20px;
 				box-sizing: border-box;
 			}
 			.empty-state:focus {
 				outline: none;
-				border-color: #0076ff;
-				background-color: #fafdff;
+				border-color: var(--color-brand-600);
+				background-color: var(--color-brand-50);
 			}
 			/* Tight canvas wrapper matching image dimensions exactly */
 			/* Image on the left, a right margin column (padding-right) for the requirement cards */
@@ -132,7 +203,7 @@
 			button {
 				padding: 10px 24px;
 				font-size: 16px;
-				background-color: #0076ff;
+				background-color: var(--color-brand-600);
 				color: white;
 				border: none;
 				border-radius: 6px;
@@ -149,25 +220,25 @@
 			}
 			button.secondary {
 				background-color: white;
-				color: #0076ff;
-				border: 1px solid #0076ff;
+				color: var(--color-brand-600);
+				border: 1px solid var(--color-brand-600);
 			}
 			#status-msg {
 				flex-basis: 100%;
 				margin: 10px 0 0;
 				min-height: 1.2em;
 				font-size: 14px;
-				color: #555;
+				color: var(--color-slate-600);
 				text-align: center;
 			}
 			#status-msg.error {
-				color: #c62828;
+				color: var(--color-critical);
 			}
 			button.secondary:disabled {
-				border-color: #ccc;
+				border-color: var(--color-slate-300);
 			}
 			button:disabled {
-				background-color: #ccc;
+				background-color: var(--color-slate-300);
 				cursor: not-allowed;
 			}
 		</style>
@@ -176,8 +247,18 @@
 
 		<!-- Left Sidebar: Requirements List -->
 		<div class="left-pane">
+			<header class="app-header">
+				<a href="https://vdatacloud.com" target="_blank" rel="noopener"><img src={logo.src} alt="Data Cloud" width="44" height="35" /></a>
+				<h1>Clipped Image Upload and Markup</h1>
+			</header>
 			<h2>System Requirements</h2>
 			<div id="requirements-list">Loading requirements from server...</div>
+			<footer class="app-footer">
+				<div>Built by <a href="https://vdatacloud.com" target="_blank" rel="noopener">Data Cloud LLC</a></div>
+				<div>
+					<a href="https://github.com/vdatacloud/astro-clipboard" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>Source on GitHub</a>
+				</div>
+			</footer>
 		</div>
 
 		<!-- Right Side Canvas: Upload and Interaction -->
@@ -259,7 +340,7 @@
 					data.forEach((req, idx) => {
 						const div = document.createElement('div');
 						div.className = 'req-item';
-						div.style.borderLeft = '4px solid #d1d5da';
+						div.style.borderLeft = '4px solid var(--color-slate-300)';
 						div.style.transition = 'all 0.2s ease';
 						div.draggable = true;
 						div.innerText = `${req.id}) ${req.text}`;
@@ -471,8 +552,8 @@
 				const colorById = new Map(pinnedRequirements.map(p => [p.id, p.color]));
 				document.querySelectorAll<HTMLElement>('.req-item').forEach(item => {
 					const color = colorById.get(Number(item.dataset.id));
-					item.style.borderLeft = color ? `6px solid ${color}` : '4px solid #d1d5da';
-					item.style.backgroundColor = color ? `${color}10` : '#f8f9fa';
+					item.style.borderLeft = color ? `6px solid ${color}` : '4px solid var(--color-slate-300)';
+					item.style.backgroundColor = color ? `${color}10` : 'var(--color-slate-50)';
 				});
 			}
 

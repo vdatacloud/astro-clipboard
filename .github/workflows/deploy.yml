@@ -1,0 +1,96 @@
+name: Build and deploy demo
+
+# Every pull request is built and checked. A merge to main, a published
+# release, or a manual run also deploys the demo Worker that serves
+# https://vdatacloud.com/sandbox/astro-clipboard/ (see README "Demo deployment").
+#
+# Needs, in the repo settings:
+#   secret   CLOUDFLARE_API_TOKEN   token with "Workers Scripts: Edit" on the account
+#   variable CLOUDFLARE_ACCOUNT_ID  the Cloudflare account that also hosts the `website` Worker
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.mod
+
+      - name: Vet and build backend
+        working-directory: backend
+        run: |
+          go vet ./...
+          go build ./...
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build demo
+        working-directory: frontend
+        run: npm run build:demo
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: demo-dist
+          path: frontend/dist
+          retention-days: 7
+
+  deploy:
+    needs: check
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: demo
+      url: https://vdatacloud.com/sandbox/astro-clipboard/
+    # A release published right after its merge would otherwise race the
+    # main-branch deploy; let them run one at a time, in order.
+    concurrency:
+      group: deploy-demo
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: demo-dist
+          path: frontend/dist
+
+      - name: Deploy Worker
+        working-directory: frontend
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          # Passed through env, not interpolated into the script, since a tag name is user input.
+          DEPLOY_MESSAGE: ${{ github.event_name }} ${{ github.ref_name }} ${{ github.sha }}
+        run: npx wrangler deploy --message "$DEPLOY_MESSAGE"
