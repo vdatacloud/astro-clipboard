@@ -222,7 +222,8 @@
 				y: number;    // pixel y in the original (natural) image
 			};
 
-			const API_BASE = 'http://localhost:8080';
+			// The Go server locally; the demo build sets PUBLIC_API_BASE to the Worker's path on vdatacloud.com.
+			const API_BASE = import.meta.env.PUBLIC_API_BASE ?? 'http://localhost:8080';
 			const BADGE_WIDTH = 200;  // keep in sync with the wrapper's padding-right in CSS
 			const MARGIN_GAP = 40;    // space between the image's right edge and the cards
 			const CARD_SPACING = 8;   // vertical gap between stacked cards

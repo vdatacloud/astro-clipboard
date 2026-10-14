@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "astro-clipboard",
+  "compatibility_date": "2026-10-01",
+  "main": "worker/index.js",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  // Reachable only through the website Worker's service binding at
+  // vdatacloud.com/sandbox/astro-clipboard, never on its own workers.dev URL.
+  "workers_dev": false,
+  "preview_urls": false
+}

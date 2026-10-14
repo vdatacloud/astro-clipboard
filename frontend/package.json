@@ -9,9 +9,14 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "build:demo": "BASE_PATH=/sandbox/astro-clipboard PUBLIC_API_BASE=/sandbox/astro-clipboard astro build",
+    "deploy": "npm run build:demo && wrangler deploy"
   },
   "dependencies": {
     "astro": "^7.3.8"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.0"
   }
 }

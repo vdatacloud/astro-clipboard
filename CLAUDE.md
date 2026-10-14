@@ -28,7 +28,17 @@ npm run astro -- check   # type-check (tsconfig extends astro/tsconfigs/strict)
 ```
 `frontend/AGENTS.md` says to start the dev server in the background with `astro dev --background` and manage it with `astro dev stop|status|logs`.
 
-The repo has no tests, linter config or git repository yet.
+The repo has no tests or linter config. It is hosted at github.com/vdatacloud/astro-clipboard (public).
+
+## Demo deployment (vdatacloud.com/sandbox/astro-clipboard)
+
+Cloudflare can't run the Go server, so the demo uses a Cloudflare Worker instead: `frontend/worker/index.js` with `frontend/wrangler.jsonc` (Worker name `astro-clipboard`). It serves `dist/` and reimplements both API routes. Uploads are validated and then **discarded**; nothing is stored. Keep its `REQUIREMENTS` list in sync with `main.go`.
+```sh
+npm run build:demo   # BASE_PATH and PUBLIC_API_BASE = /sandbox/astro-clipboard
+npm run deploy       # build:demo + wrangler deploy (needs `npx wrangler login`)
+npx wrangler dev     # local test at http://localhost:8787/sandbox/astro-clipboard/ (after build:demo)
+```
+The Worker has no route or workers.dev URL of its own. The website Worker (`vdatacloud/website`, `worker/index.js`) forwards `/sandbox/astro-clipboard/*` to it through the `ASTRO_CLIPBOARD` service binding and adds the site's security headers. Astro writes `dist/` at the root even when `base` is set, so the Worker strips the `/sandbox/astro-clipboard` prefix before calling `ASSETS`.
 
 ## Architecture
 
@@ -38,7 +48,7 @@ The repo has no tests, linter config or git repository yet.
 - The filename is reduced with `filepath.Base`. When a `status` field is present, the pins are also written to `uploads/<image-name>.json` as `{image, status, pins}`.
 
 **Frontend (frontend/src/pages/index.astro)**
-- The backend URL `http://localhost:8080` is hardcoded in the page's `fetch` calls. There is no proxy or env config.
+- The backend URL is `import.meta.env.PUBLIC_API_BASE`, and it falls back to `http://localhost:8080`. There is no dev proxy.
 - The page `<style>` is `is:global` on purpose: `.req-item` and `.dropped-badge` elements are created by script, and Astro's default scoped styles never reach them.
 - Flow: `loadRequirements()` builds draggable sidebar items. A paste event wraps the clipboard image as `screenshot-<Date.now()>.png` (this name becomes the filename on the server). Dropping a requirement onto `#drop-zone-wrapper` stores a pin in `pinnedRequirements`.
 - Pins are stored as **percentages** (`pctX`, `pctY`) of the displayed image (`#preview`), plus `x`/`y` in the image's natural pixels. `renderAllPins()` clears everything and redraws it on every change and on window resize: SVG pin circles and dashed leader lines go in `#overlay-canvas`; the requirement cards (`.dropped-badge`) stack without overlapping in a right margin column created by the wrapper's `padding-right`, which must match `MARGIN_GAP + BADGE_WIDTH` in the script. Drops outside the image are ignored. Keep pins as percentages so they stay aligned with the image when the window is resized.
